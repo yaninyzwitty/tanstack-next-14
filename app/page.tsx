@@ -3,7 +3,6 @@
 import {createRoomHandler} from "@/actions/create-room";
 import InputForm from "@/components/input-form";
 import {Button} from "@/components/ui/button";
-import axios from "axios";
 import {useRouter} from "next/navigation";
 import {useTransition} from "react";
 import {toast} from "sonner";

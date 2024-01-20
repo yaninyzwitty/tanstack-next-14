@@ -1,9 +1,12 @@
 "use client";
 import {fetcher} from "@/lib/fetchMessages";
+import {messageSchema} from "@/lib/schema";
 import {Message} from "@/types";
-import {FC, useEffect, useState} from "react";
-import useSWR from "swr";
-import {pusherClient} from "@/lib/pusher";
+import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
+import axios from "axios";
+import {useParams} from "next/navigation";
+import {FC} from "react";
+import * as z from "zod";
 
 interface MessagesProps {
   initialMessages: Message[];
@@ -11,33 +14,22 @@ interface MessagesProps {
 }
 
 const Messages: FC<MessagesProps> = ({initialMessages, roomId}) => {
-  const {
-    data: messages,
-    isLoading,
-    mutate,
-  } = useSWR<Message[]>("/api/messages", () => fetcher(roomId as string));
+  const queryClient = useQueryClient();
+  const {mutate, isPending} = useMutation({
+    mutationFn: async (values: z.infer<typeof messageSchema>) => {
+      const {data} = await axios.post("/api/messages", values);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({queryKey: ["messages"]});
+    },
+  });
 
-  useEffect(() => {
-    const channel = pusherClient.subscribe(roomId);
-    channel.bind("incoming-message", async (data: Message) => {
-      if (messages?.find((message) => message.messageId === data.messageId))
-        return;
-
-      if (!messages) {
-        await mutate(fetcher(roomId));
-      } else {
-        mutate(fetcher(roomId), {
-          optimisticData: [data, ...messages],
-          rollbackOnError: true,
-        });
-      }
-    });
-
-    return () => {
-      channel.unbind_all();
-      channel.unsubscribe();
-    };
-  }, [messages, mutate, roomId]);
+  const params = useParams();
+  const {data: messages} = useQuery<Message[]>({
+    queryKey: ["messages"],
+    queryFn: () => fetcher(params.roomId as string),
+  });
 
   return (
     <div>

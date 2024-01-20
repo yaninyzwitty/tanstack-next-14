@@ -1,8 +1,7 @@
 import cassandraDb from "@/cassandra";
 import { messageSchema } from "@/lib/schema";
-import { auth, currentUser  } from "@clerk/nextjs";
+import { auth, currentUser } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
-import { serverPusher } from "@/lib/pusher";
 
 export async function POST (req: Request) {
     try {
@@ -23,14 +22,14 @@ export async function POST (req: Request) {
             return new NextResponse('Room id required!', { status: 400 })
         };
 
-        serverPusher.trigger(roomId, 'incoming-message', {
-            message,
-            roomId,
-            userId,
-            username,
-            createdAt: Date.now(),
-            messageId
-        });
+        // serverPusher.trigger(roomId, 'incoming-message', {
+        //     message,
+        //     roomId,
+        //     userId,
+        //     username,
+        //     createdAt: Date.now(),
+        //     messageId
+        // });
 
         
 

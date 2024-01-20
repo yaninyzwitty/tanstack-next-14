@@ -1,6 +1,5 @@
 "use client";
 
-import useSWR from "swr";
 import * as z from "zod";
 
 import {Button} from "@/components/ui/button";
@@ -16,28 +15,36 @@ import {
 import {Input} from "@/components/ui/input";
 import {messageSchema} from "@/lib/schema";
 import {zodResolver} from "@hookform/resolvers/zod";
-import axios from "axios";
 import {useForm} from "react-hook-form";
-import {toast} from "sonner";
 
 import {Message} from "@/types";
-import {useParams, useRouter} from "next/navigation";
+import {useParams} from "next/navigation";
+import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {fetcher} from "@/lib/fetchMessages";
+import axios from "axios";
+import {toast} from "sonner";
 
 type Props = {
   initialMessages: Message[];
 };
 function MessageForm({initialMessages}: Props) {
   const params = useParams();
-  const {
-    data: messages,
-    isLoading,
-    mutate,
-  } = useSWR<Message[]>("/api/messages", () =>
-    fetcher(params.roomId as string)
-  );
+  const queryClient = useQueryClient();
+  const {data} = useQuery({
+    queryKey: ["messages"],
+    queryFn: () => fetcher(params.roomId as string),
+  });
 
-  const router = useRouter();
+  const {mutate, isPending} = useMutation({
+    mutationFn: async (values: z.infer<typeof messageSchema>) => {
+      const {data} = await axios.post("/api/messages", values);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({queryKey: ["messages"]});
+    },
+  });
+
   const form = useForm<z.infer<typeof messageSchema>>({
     resolver: zodResolver(messageSchema),
     defaultValues: {
@@ -45,26 +52,26 @@ function MessageForm({initialMessages}: Props) {
     },
   });
 
-  async function onSubmit(values: z.infer<typeof messageSchema>) {
-    try {
-      const allValues = {...values, roomId: params.roomId};
-      const uploadMessage = async () => {
-        const {data} = await axios.post("/api/messages", allValues);
+  function onSubmit(values: z.infer<typeof messageSchema>) {
+    const allValues = {...values, roomId: params.roomId as string};
 
-        return [data.message, ...messages!];
-      };
+    mutate(allValues, {
+      onSuccess: (data) => toast.success(data?.message),
+    });
 
-      await mutate(uploadMessage(), {
-        optimisticData: [values.message as any, ...(messages as Message[])],
-        rollbackOnError: true,
-      });
-    } catch (error) {
-      toast.error("Something went wrong!");
-    }
+    // startTransition(() => {
+    //   message(allValues)
+    //     .then((data) => {
+    //       if (data?.success) {
+    //         toast.success(data.success);
+    //       }
+    //       if (data?.error) {
+    //         toast.error(data.error);
+    //       }
+    //     })
+    //     .catch(() => toast.error("Something went wrong"));
+    // });
   }
-
-  const {isSubmitting, isValidating} = form.formState;
-  const disabled = isSubmitting || isValidating;
 
   return (
     <div>
@@ -83,7 +90,7 @@ function MessageForm({initialMessages}: Props) {
                   <Input
                     placeholder="your message..."
                     type="text"
-                    disabled={disabled}
+                    disabled={isPending}
                     {...field}
                   />
                 </FormControl>
@@ -94,7 +101,7 @@ function MessageForm({initialMessages}: Props) {
               </FormItem>
             )}
           />
-          <Button type="submit" disabled={disabled}>
+          <Button type="submit" disabled={isPending}>
             Submit
           </Button>
         </form>
